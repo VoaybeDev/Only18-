@@ -1,6 +1,8 @@
-//src/types.ts
 export type Role = "modele" | "chateur" | "subscriber";
 export type MediaType = "image" | "video";
+export type SellerRole = "modele" | "chateur";
+export type PaymentSource = "chat" | "viewer" | "catalogue";
+export type SubscriptionStatus = "active" | "inactive";
 
 export interface User {
   id: string;
@@ -11,6 +13,7 @@ export interface User {
   avatar: string;
   bio: string;
   createdByModelId?: string;
+  subscriptionStatus?: SubscriptionStatus;
 }
 
 export interface ContentItem {
@@ -31,11 +34,22 @@ export interface ContentItem {
 export interface Transaction {
   id: string;
   contentId: string;
+  contentTitle: string;
   buyerId: string;
-  sellerId: string;
+  buyerUsername: string;
+  creatorId: string;
+  creatorUsername: string;
+  soldByUserId: string;
+  soldByUsername: string;
+  soldByRole: SellerRole;
   chateurId?: string | null;
   amount: number;
+  currency: "EUR";
+  source: PaymentSource;
   accessGranted: boolean;
+  chatterCommissionRate: number;
+  chatterCommissionAmount: number;
+  modelNetAmount: number;
   createdAt: string;
 }
 

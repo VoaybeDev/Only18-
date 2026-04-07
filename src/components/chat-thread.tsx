@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Lock, SendHorizontal } from "lucide-react";
+import { CreditCard, Lock, SendHorizontal, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,22 +11,32 @@ import { ContentItem, Message, Role, Transaction, User } from "@/types";
 
 interface ChatThreadProps {
   currentUser: User;
+  title: string;
+  subtitle?: string;
   messages: Message[];
   content: ContentItem[];
   transactions: Transaction[];
+  canReply: boolean;
+  replyPlaceholder: string;
   onSendMessage: (text: string) => void;
   onSimulatePayment: (contentId: string) => void;
 }
 
 export function ChatThread({
   currentUser,
+  title,
+  subtitle,
   messages,
   content,
   transactions,
+  canReply,
+  replyPlaceholder,
   onSendMessage,
   onSimulatePayment,
 }: ChatThreadProps) {
   const [draft, setDraft] = useState("");
+  const [paymentTarget, setPaymentTarget] = useState<ContentItem | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const contentById = useMemo(
     () => Object.fromEntries(content.map((item) => [item.id, item])),
@@ -36,9 +46,12 @@ export function ChatThread({
   const canAccess = (item: ContentItem) => {
     if (currentUser.role !== "subscriber") return true;
     if (item.price === 0) return true;
+
     return transactions.some(
       (transaction) =>
-        transaction.contentId === item.id && transaction.buyerId === currentUser.id && transaction.accessGranted,
+        transaction.contentId === item.id &&
+        transaction.buyerId === currentUser.id &&
+        transaction.accessGranted,
     );
   };
 
@@ -53,127 +66,321 @@ export function ChatThread({
     if (currentUser.role === "subscriber") return null;
     if (messageRole === "modele") return <Badge variant="premium">modèle</Badge>;
     if (messageRole === "chateur") return <Badge variant="accent">chateur</Badge>;
-    return <Badge variant="default">subscriber</Badge>;
+    return <Badge variant="default">fan</Badge>;
+  };
+
+  const resolveAvatarSrc = (message: Message) => {
+    if (message.senderRole === "modele") return "https://picsum.photos/id/64/100/100";
+    if (message.senderRole === "chateur") return "https://picsum.photos/id/65/100/100";
+    return "https://picsum.photos/id/1005/100/100";
   };
 
   const handleSubmit = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() || !canReply) return;
     onSendMessage(draft);
     setDraft("");
   };
 
+  const openPaymentModal = (item: ContentItem) => {
+    setPaymentTarget(item);
+  };
+
+  const closePaymentModal = () => {
+    if (isProcessingPayment) return;
+    setPaymentTarget(null);
+  };
+
+  const confirmPayment = async () => {
+    if (!paymentTarget) return;
+
+    setIsProcessingPayment(true);
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    onSimulatePayment(paymentTarget.id);
+    setIsProcessingPayment(false);
+    setPaymentTarget(null);
+  };
+
   return (
-    <div className="flex h-[calc(100vh-11rem)] min-h-[560px] flex-col overflow-hidden rounded-[1.5rem] border border-white/5 bg-card/80 shadow-premium">
-      <div className="border-b border-white/5 p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Conversation active</p>
-            <h2 className="text-xl font-semibold">
-              {currentUser.role === "subscriber" ? "modele_test" : "fan_test"}
-            </h2>
+    <>
+      <div className="flex h-[calc(100vh-11rem)] min-h-[560px] flex-col overflow-hidden rounded-[1.5rem] border border-white/5 bg-card/80 shadow-premium">
+        <div className="border-b border-white/5 p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Conversation active</p>
+              <h2 className="text-xl font-semibold">{title}</h2>
+              {subtitle ? (
+                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+              ) : null}
+            </div>
+
+            {currentUser.role !== "subscriber" ? (
+              <Badge variant="warning">Invisible côté fan</Badge>
+            ) : (
+              <Badge variant={canReply ? "success" : "warning"}>
+                {canReply ? "Chat privé" : "Public uniquement"}
+              </Badge>
+            )}
           </div>
-          {currentUser.role !== "subscriber" ? (
-            <Badge variant="warning">Invisible côté fan</Badge>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+          {messages.map((message) => {
+            const attachedContent = message.contentId ? contentById[message.contentId] : undefined;
+            const unlocked = attachedContent ? canAccess(attachedContent) : false;
+
+            const isInternalSession =
+              currentUser.role === "modele" || currentUser.role === "chateur";
+
+            const isRightAligned = isInternalSession
+              ? message.senderRole === "modele" || message.senderRole === "chateur"
+              : message.senderId === currentUser.id;
+
+            return (
+              <div
+                key={message.id}
+                className={`flex ${isRightAligned ? "justify-end" : "justify-start"}`}
+              >
+                <div className="max-w-[92%] sm:max-w-[78%]">
+                  <div
+                    className={`mb-2 flex items-center gap-3 ${
+                      isRightAligned ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    {!isRightAligned ? (
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={resolveAvatarSrc(message)} />
+                        <AvatarFallback>
+                          {resolveSenderName(message).slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : null}
+
+                    <div
+                      className={`flex items-center gap-2 ${
+                        isRightAligned ? "flex-row-reverse text-right" : ""
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{resolveSenderName(message)}</span>
+                      {resolveRoleBadge(message.senderRole)}
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(message.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Card
+                    className={`rounded-[1.25rem] ${
+                      isRightAligned ? "bg-primary/15" : "bg-white/5"
+                    }`}
+                  >
+                    <div className="p-4">
+                      <p className="text-sm leading-6 text-white/90">{message.text}</p>
+
+                      {attachedContent ? (
+                        <div className="mt-4 overflow-hidden rounded-[1.1rem] border border-white/10 bg-background/70">
+                          <div className="relative aspect-[16/10] overflow-hidden bg-black">
+                            {unlocked ? (
+                              attachedContent.mediaType === "video" ? (
+                                <video
+                                  src={attachedContent.mediaUrl}
+                                  controls
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <img
+                                  src={attachedContent.mediaUrl}
+                                  alt={attachedContent.title}
+                                  className="h-full w-full object-cover"
+                                />
+                              )
+                            ) : (
+                              <>
+                                <img
+                                  src={attachedContent.previewUrl}
+                                  alt={attachedContent.title}
+                                  className="pointer-events-none h-full w-full scale-110 select-none object-cover blur-2xl brightness-50 saturate-50"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/70" />
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                                  <div className="rounded-full bg-black/70 p-3 text-white shadow-premium">
+                                    <Lock className="h-5 w-5" />
+                                  </div>
+                                  <div>
+                                    <p className="text-base font-semibold text-white">
+                                      Média verrouillé
+                                    </p>
+                                    <p className="mt-1 text-sm text-white/75">
+                                      Paiement requis pour révéler le contenu complet.
+                                    </p>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <div className="space-y-3 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium">{attachedContent.title}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {attachedContent.caption}
+                                </p>
+                              </div>
+
+                              <Badge
+                                variant={attachedContent.price === 0 ? "success" : "premium"}
+                              >
+                                {attachedContent.price === 0
+                                  ? "Free"
+                                  : formatCurrency(attachedContent.price)}
+                              </Badge>
+                            </div>
+
+                            {!unlocked && attachedContent.price > 0 ? (
+                              <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 px-3 py-2 text-xs text-white/75">
+                                Aperçu masqué jusqu’au paiement simulé.
+                              </div>
+                            ) : null}
+
+                            <div className="flex flex-wrap gap-3">
+                              <Button asChild variant="secondary" className="flex-1">
+                                <Link to={`/content/${attachedContent.id}`}>
+                                  {unlocked ? "Voir" : "Voir détails"}
+                                </Link>
+                              </Button>
+
+                              {!unlocked && attachedContent.price > 0 ? (
+                                <Button
+                                  variant="premium"
+                                  className="flex-1"
+                                  onClick={() => openPaymentModal(attachedContent)}
+                                >
+                                  Simuler paiement
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            );
+          })}
+
+          {messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-center">
+              <div>
+                <p className="text-lg font-medium">Aucun message</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Cette conversation est vide pour le moment.
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="border-t border-white/5 p-4 sm:p-6">
+          {canReply ? (
+            <div className="flex gap-3">
+              <Input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={replyPlaceholder}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+              />
+              <Button variant="premium" size="icon" onClick={handleSubmit}>
+                <SendHorizontal className="h-4 w-4" />
+              </Button>
+            </div>
           ) : (
-            <Badge variant="success">Chat direct</Badge>
+            <div className="rounded-[1rem] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              La messagerie privée est réservée aux fans abonnés.
+            </div>
           )}
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
-        {messages.map((message) => {
-          const isMe = message.senderId === currentUser.id;
-          const attachedContent = message.contentId ? contentById[message.contentId] : undefined;
-          const unlocked = attachedContent ? canAccess(attachedContent) : false;
+      {paymentTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#0f0b18] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-pink-300">Paiement simulé</p>
+                <h3 className="mt-1 text-xl font-semibold text-white">
+                  Débloquer {paymentTarget.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closePaymentModal}
+                className="rounded-full border border-white/10 p-2 text-white/70 transition hover:bg-white/5 hover:text-white"
+                disabled={isProcessingPayment}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-          return (
-            <div key={message.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[92%] sm:max-w-[78%] ${isMe ? "order-2" : "order-1"}`}>
-                <div className="mb-2 flex items-center gap-3">
-                  {!isMe ? (
-                    <Avatar className="h-9 w-9">
-                      <AvatarImage src={currentUser.role === "subscriber" ? "https://picsum.photos/id/64/100/100" : "https://picsum.photos/id/65/100/100"} />
-                      <AvatarFallback>O</AvatarFallback>
-                    </Avatar>
-                  ) : null}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{resolveSenderName(message)}</span>
-                    {resolveRoleBadge(message.senderRole)}
-                    <span className="text-xs text-muted-foreground">{formatDate(message.createdAt)}</span>
-                  </div>
-                </div>
-                <Card className={`rounded-[1.25rem] ${isMe ? "bg-primary/15" : "bg-white/5"}`}>
-                  <div className="p-4">
-                    <p className="text-sm leading-6 text-white/90">{message.text}</p>
-                    {attachedContent ? (
-                      <div className="mt-4 overflow-hidden rounded-[1.1rem] border border-white/10 bg-background/70">
-                        <div className="relative aspect-[16/10] overflow-hidden">
-                          <img
-                            src={attachedContent.previewUrl}
-                            alt={attachedContent.title}
-                            className={`h-full w-full object-cover ${unlocked ? "blur-0" : "blur-md"}`}
-                          />
-                          {!unlocked ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                              <div className="rounded-full bg-black/60 p-3 text-white">
-                                <Lock className="h-5 w-5" />
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="space-y-3 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium">{attachedContent.title}</p>
-                              <p className="text-sm text-muted-foreground">{attachedContent.caption}</p>
-                            </div>
-                            <Badge variant={attachedContent.price === 0 ? "success" : "premium"}>
-                              {attachedContent.price === 0 ? "Free" : formatCurrency(attachedContent.price)}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-wrap gap-3">
-                            <Button asChild variant="secondary" className="flex-1">
-                              <Link to={`/content/${attachedContent.id}`}>Voir</Link>
-                            </Button>
-                            {!unlocked && attachedContent.price > 0 ? (
-                              <Button
-                                variant="premium"
-                                className="flex-1"
-                                onClick={() => onSimulatePayment(attachedContent.id)}
-                              >
-                                Simuler paiement
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </Card>
+            <div className="mt-5 overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/40">
+              <div className="relative aspect-[16/10] overflow-hidden">
+                <img
+                  src={paymentTarget.previewUrl}
+                  alt={paymentTarget.title}
+                  className="h-full w-full scale-110 object-cover blur-2xl brightness-50 saturate-50"
+                />
+                <div className="absolute inset-0 bg-black/40" />
               </div>
             </div>
-          );
-        })}
-      </div>
 
-      <div className="border-t border-white/5 p-4 sm:p-6">
-        <div className="flex gap-3">
-          <Input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={currentUser.role === "subscriber" ? "Écrire à modele_test" : "Répondre au fan"}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                handleSubmit();
-              }
-            }}
-          />
-          <Button variant="premium" size="icon" onClick={handleSubmit}>
-            <SendHorizontal className="h-4 w-4" />
-          </Button>
+            <div className="mt-5 space-y-3 rounded-[1.2rem] border border-white/10 bg-white/5 p-4 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Contenu</span>
+                <span className="font-medium text-white">{paymentTarget.title}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Montant</span>
+                <span className="font-medium text-white">
+                  {formatCurrency(paymentTarget.price)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Compte débité</span>
+                <span className="font-medium text-white">•••• 4242</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Destinataire visible</span>
+                <span className="font-medium text-white">modele_test</span>
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={closePaymentModal}
+                disabled={isProcessingPayment}
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="premium"
+                className="flex-1"
+                onClick={confirmPayment}
+                disabled={isProcessingPayment}
+              >
+                <CreditCard className="h-4 w-4" />
+                {isProcessingPayment ? "Paiement..." : "Payer maintenant"}
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </>
   );
 }

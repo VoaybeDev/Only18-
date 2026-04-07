@@ -1,20 +1,44 @@
-import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AppLogoProps {
   className?: string;
+  logoClassName?: string;
+  textClassName?: string;
+  compact?: boolean;
 }
 
-export function AppLogo({ className }: AppLogoProps) {
+export function AppLogo({
+  className,
+  logoClassName,
+  textClassName,
+  compact = false,
+}: AppLogoProps) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-blue-500 shadow-premium">
-        <Sparkles className="h-5 w-5 text-white" />
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 shadow-premium",
+          compact ? "h-12 w-12 p-1.5" : "h-16 w-16 p-2",
+          logoClassName,
+        )}
+      >
+        <img
+          src="/logo.png"
+          alt="Only18+"
+          className="h-full w-full object-contain drop-shadow-[0_0_18px_rgba(255,80,80,0.35)]"
+        />
       </div>
-      <div>
-        <p className="text-lg font-semibold leading-none tracking-tight">Only18+</p>
-        <p className="text-xs text-muted-foreground">premium content demo</p>
-      </div>
+
+      {!compact ? (
+        <div className={cn("min-w-0", textClassName)}>
+          <p className="text-lg font-semibold leading-none tracking-tight text-white">
+            Only18+
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            premium content demo
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

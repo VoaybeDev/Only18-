@@ -1,12 +1,24 @@
-//src/store/useAppStore.ts
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { demoContent, demoMessages, demoTransactions, demoUsers } from "@/data/seed";
-import { ContentItem, Message, ToastItem, Transaction, User } from "@/types";
+import {
+  ContentItem,
+  Message,
+  PaymentSource,
+  SellerRole,
+  ToastItem,
+  Transaction,
+  User,
+} from "@/types";
 
 interface RegisterPayload {
   username: string;
   password: string;
+}
+
+interface SendMessageResult {
+  ok: boolean;
+  message: string;
 }
 
 interface AppStore {
@@ -21,12 +33,14 @@ interface AppStore {
   register: (payload: RegisterPayload) => { ok: boolean; message: string };
   logout: () => void;
   completeOnboarding: () => void;
-  simulatePayment: (contentId: string) => { ok: boolean; message: string };
-  sendMessage: (text: string) => void;
+  simulatePayment: (contentId: string, source?: PaymentSource) => { ok: boolean; message: string };
+  sendMessage: (conversationId: string, text: string) => SendMessageResult;
   pushToast: (title: string, description: string) => void;
   dismissToast: (toastId: string) => void;
   resetDemo: () => void;
 }
+
+const CHATTER_COMMISSION_RATE = 0.1;
 
 const initialState = {
   currentUserId: null,
@@ -37,6 +51,43 @@ const initialState = {
   messages: demoMessages,
   toasts: [] as ToastItem[],
 };
+
+function roundToTwo(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function resolveSaleMeta(item: ContentItem, users: User[], messages: Message[]) {
+  const creator = users.find((user) => user.id === item.creatorId);
+  const linkedMessage = item.linkedMessageId
+    ? messages.find((message) => message.id === item.linkedMessageId)
+    : undefined;
+
+  if (linkedMessage && (linkedMessage.senderRole === "modele" || linkedMessage.senderRole === "chateur")) {
+    const seller = users.find((user) => user.id === linkedMessage.senderId);
+
+    if (seller) {
+      const soldByRole = linkedMessage.senderRole as SellerRole;
+
+      return {
+        creatorId: creator?.id ?? item.creatorId,
+        creatorUsername: creator?.username ?? "modele_test",
+        soldByUserId: seller.id,
+        soldByUsername: seller.username,
+        soldByRole,
+        chateurId: soldByRole === "chateur" ? seller.id : null,
+      };
+    }
+  }
+
+  return {
+    creatorId: creator?.id ?? item.creatorId,
+    creatorUsername: creator?.username ?? "modele_test",
+    soldByUserId: creator?.id ?? item.creatorId,
+    soldByUsername: creator?.username ?? "modele_test",
+    soldByRole: "modele" as SellerRole,
+    chateurId: null,
+  };
+}
 
 export const useAppStore = create<AppStore>()(
   persist(
@@ -54,6 +105,7 @@ export const useAppStore = create<AppStore>()(
         set({ currentUserId: user.id });
         return { ok: true, message: `Bienvenue ${user.displayName}` };
       },
+
       register: ({ username, password }) => {
         const alreadyExists = get().users.some((user) => user.username === username);
         if (alreadyExists) {
@@ -68,6 +120,7 @@ export const useAppStore = create<AppStore>()(
           displayName: username,
           avatar: `https://picsum.photos/seed/${username}/200/200`,
           bio: "Nouveau fan inscrit depuis la démo locale.",
+          subscriptionStatus: "inactive",
         };
 
         set((state) => ({
@@ -85,9 +138,11 @@ export const useAppStore = create<AppStore>()(
 
         return { ok: true, message: "Compte créé avec succès." };
       },
+
       logout: () => set({ currentUserId: null }),
       completeOnboarding: () => set({ onboardingComplete: true }),
-      simulatePayment: (contentId) => {
+
+      simulatePayment: (contentId, source = "catalogue") => {
         const state = get();
         const currentUser = state.users.find((user) => user.id === state.currentUserId);
         const item = state.content.find((content) => content.id === contentId);
@@ -115,14 +170,30 @@ export const useAppStore = create<AppStore>()(
           return { ok: true, message: "Ce contenu est déjà accessible." };
         }
 
+        const saleMeta = resolveSaleMeta(item, state.users, state.messages);
+        const chatterCommissionAmount =
+          saleMeta.soldByRole === "chateur" ? roundToTwo(item.price * CHATTER_COMMISSION_RATE) : 0;
+        const modelNetAmount = roundToTwo(item.price - chatterCommissionAmount);
+
         const transaction: Transaction = {
           id: `txn-${Date.now()}`,
           contentId: item.id,
+          contentTitle: item.title,
           buyerId: currentUser.id,
-          sellerId: item.creatorId,
-          chateurId: item.chateurId ?? null,
+          buyerUsername: currentUser.username,
+          creatorId: saleMeta.creatorId,
+          creatorUsername: saleMeta.creatorUsername,
+          soldByUserId: saleMeta.soldByUserId,
+          soldByUsername: saleMeta.soldByUsername,
+          soldByRole: saleMeta.soldByRole,
+          chateurId: saleMeta.chateurId,
           amount: item.price,
+          currency: "EUR",
+          source,
           accessGranted: true,
+          chatterCommissionRate: saleMeta.soldByRole === "chateur" ? CHATTER_COMMISSION_RATE : 0,
+          chatterCommissionAmount,
+          modelNetAmount,
           createdAt: new Date().toISOString(),
         };
 
@@ -132,7 +203,10 @@ export const useAppStore = create<AppStore>()(
             {
               id: `toast-${Date.now()}`,
               title: "Paiement simulé réussi",
-              description: `${item.title} est maintenant déverrouillé.`,
+              description:
+                saleMeta.soldByRole === "chateur"
+                  ? `${item.title} a été débloqué. Vente attribuée au chateur.`
+                  : `${item.title} a été débloqué. Vente attribuée à la modèle.`,
             },
             ...previous.toasts,
           ],
@@ -140,16 +214,39 @@ export const useAppStore = create<AppStore>()(
 
         return { ok: true, message: "Paiement simulé réussi." };
       },
-      sendMessage: (text) => {
+
+      sendMessage: (conversationId, text) => {
         const state = get();
         const currentUser = state.users.find((user) => user.id === state.currentUserId);
+
         if (!currentUser || !text.trim()) {
-          return;
+          return { ok: false, message: "Message vide." };
+        }
+
+        if (
+          currentUser.role === "subscriber" &&
+          currentUser.subscriptionStatus !== "active"
+        ) {
+          set((previous) => ({
+            toasts: [
+              {
+                id: `toast-${Date.now()}`,
+                title: "Audience privée réservée",
+                description: "Seuls les fans abonnés peuvent écrire à la modèle.",
+              },
+              ...previous.toasts,
+            ],
+          }));
+
+          return {
+            ok: false,
+            message: "Seuls les abonnés peuvent envoyer des messages.",
+          };
         }
 
         const message: Message = {
           id: `msg-${Date.now()}`,
-          conversationId: "conv-main",
+          conversationId,
           senderId: currentUser.id,
           senderRole: currentUser.role,
           senderDisplayName: currentUser.displayName,
@@ -162,7 +259,10 @@ export const useAppStore = create<AppStore>()(
         set((previous) => ({
           messages: [...previous.messages, message],
         }));
+
+        return { ok: true, message: "Message envoyé." };
       },
+
       pushToast: (title, description) => {
         set((state) => ({
           toasts: [
@@ -175,11 +275,13 @@ export const useAppStore = create<AppStore>()(
           ],
         }));
       },
+
       dismissToast: (toastId) => {
         set((state) => ({
           toasts: state.toasts.filter((toast) => toast.id !== toastId),
         }));
       },
+
       resetDemo: () => {
         set({ ...initialState });
       },
@@ -210,6 +312,7 @@ export const hasAccessToContent = (
   if (!user) return false;
   if (user.role === "modele" || user.role === "chateur") return true;
   if (item.price === 0) return true;
+
   return transactions.some(
     (transaction) =>
       transaction.contentId === item.id &&
