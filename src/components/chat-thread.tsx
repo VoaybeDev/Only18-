@@ -22,6 +22,9 @@ interface ChatThreadProps {
   onSimulatePayment: (contentId: string) => void;
 }
 
+const MODEL_AVATAR_URL = "https://picsum.photos/id/64/100/100";
+const FAN_AVATAR_URL = "https://picsum.photos/id/1005/100/100";
+
 export function ChatThread({
   currentUser,
   title,
@@ -70,9 +73,11 @@ export function ChatThread({
   };
 
   const resolveAvatarSrc = (message: Message) => {
-    if (message.senderRole === "modele") return "https://picsum.photos/id/64/100/100";
-    if (message.senderRole === "chateur") return "https://picsum.photos/id/65/100/100";
-    return "https://picsum.photos/id/1005/100/100";
+    if (message.senderRole === "subscriber") {
+      return FAN_AVATAR_URL;
+    }
+
+    return MODEL_AVATAR_URL;
   };
 
   const handleSubmit = () => {
@@ -102,28 +107,30 @@ export function ChatThread({
 
   return (
     <>
-      <div className="flex h-[calc(100vh-11rem)] min-h-[560px] flex-col overflow-hidden rounded-[1.5rem] border border-white/5 bg-card/80 shadow-premium">
-        <div className="border-b border-white/5 p-4 sm:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+      <div className="flex min-h-[70dvh] w-full min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-white/5 bg-card/80 shadow-premium lg:min-h-[calc(100dvh-9rem)]">
+        <div className="border-b border-white/5 p-4 sm:p-5 lg:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm text-muted-foreground">Conversation active</p>
-              <h2 className="text-xl font-semibold">{title}</h2>
+              <h2 className="truncate text-xl font-semibold sm:text-2xl">{title}</h2>
               {subtitle ? (
                 <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
 
             {currentUser.role !== "subscriber" ? (
-              <Badge variant="warning">Invisible côté fan</Badge>
+              <Badge variant="warning" className="w-fit">
+                Invisible côté fan
+              </Badge>
             ) : (
-              <Badge variant={canReply ? "success" : "warning"}>
+              <Badge variant={canReply ? "success" : "warning"} className="w-fit">
                 {canReply ? "Chat privé" : "Public uniquement"}
               </Badge>
             )}
           </div>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-5 lg:p-6">
           {messages.map((message) => {
             const attachedContent = message.contentId ? contentById[message.contentId] : undefined;
             const unlocked = attachedContent ? canAccess(attachedContent) : false;
@@ -131,8 +138,11 @@ export function ChatThread({
             const isInternalSession =
               currentUser.role === "modele" || currentUser.role === "chateur";
 
+            const isInternalMessage =
+              message.senderRole === "modele" || message.senderRole === "chateur";
+
             const isRightAligned = isInternalSession
-              ? message.senderRole === "modele" || message.senderRole === "chateur"
+              ? isInternalMessage
               : message.senderId === currentUser.id;
 
             return (
@@ -140,14 +150,14 @@ export function ChatThread({
                 key={message.id}
                 className={`flex ${isRightAligned ? "justify-end" : "justify-start"}`}
               >
-                <div className="max-w-[92%] sm:max-w-[78%]">
+                <div className="max-w-[96%] sm:max-w-[84%] lg:max-w-[74%]">
                   <div
-                    className={`mb-2 flex items-center gap-3 ${
+                    className={`mb-2 flex items-center gap-2 sm:gap-3 ${
                       isRightAligned ? "justify-end" : "justify-start"
                     }`}
                   >
                     {!isRightAligned ? (
-                      <Avatar className="h-9 w-9">
+                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                         <AvatarImage src={resolveAvatarSrc(message)} />
                         <AvatarFallback>
                           {resolveSenderName(message).slice(0, 2).toUpperCase()}
@@ -156,8 +166,8 @@ export function ChatThread({
                     ) : null}
 
                     <div
-                      className={`flex items-center gap-2 ${
-                        isRightAligned ? "flex-row-reverse text-right" : ""
+                      className={`flex flex-wrap items-center gap-2 ${
+                        isRightAligned ? "justify-end text-right" : ""
                       }`}
                     >
                       <span className="text-sm font-medium">{resolveSenderName(message)}</span>
@@ -220,7 +230,7 @@ export function ChatThread({
 
                           <div className="space-y-3 p-4">
                             <div className="flex items-start justify-between gap-3">
-                              <div>
+                              <div className="min-w-0">
                                 <p className="font-medium">{attachedContent.title}</p>
                                 <p className="text-sm text-muted-foreground">
                                   {attachedContent.caption}
@@ -229,6 +239,7 @@ export function ChatThread({
 
                               <Badge
                                 variant={attachedContent.price === 0 ? "success" : "premium"}
+                                className="shrink-0"
                               >
                                 {attachedContent.price === 0
                                   ? "Free"
@@ -242,7 +253,7 @@ export function ChatThread({
                               </div>
                             ) : null}
 
-                            <div className="flex flex-wrap gap-3">
+                            <div className="flex flex-col gap-3 sm:flex-row">
                               <Button asChild variant="secondary" className="flex-1">
                                 <Link to={`/content/${attachedContent.id}`}>
                                   {unlocked ? "Voir" : "Voir détails"}
@@ -281,9 +292,9 @@ export function ChatThread({
           ) : null}
         </div>
 
-        <div className="border-t border-white/5 p-4 sm:p-6">
+        <div className="border-t border-white/5 p-3 sm:p-5 lg:p-6">
           {canReply ? (
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -294,8 +305,14 @@ export function ChatThread({
                     handleSubmit();
                   }
                 }}
+                className="min-w-0"
               />
-              <Button variant="premium" size="icon" onClick={handleSubmit}>
+              <Button
+                variant="premium"
+                size="icon"
+                onClick={handleSubmit}
+                className="shrink-0 self-end sm:self-auto"
+              >
                 <SendHorizontal className="h-4 w-4" />
               </Button>
             </div>
