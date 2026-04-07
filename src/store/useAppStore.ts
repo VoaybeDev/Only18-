@@ -771,38 +771,8 @@ export const useAppStore = create<AppStore>()(
   ),
 );
 
-export const selectCurrentUser = (state: AppStore) => {
-  const user = state.users.find((entry) => entry.id === state.currentUserId) ?? null;
-
-  if (!user || user.role !== "subscriber") {
-    return user;
-  }
-
-  const subscribedModelIds = getActiveSubscribedModelIds(state.subscriptions, user.id);
-
-  const activeModelSubscription =
-    state.activeModelId
-      ? state.subscriptions.find(
-          (subscription) =>
-            subscription.subscriberId === user.id &&
-            subscription.modelId === state.activeModelId &&
-            isSubscriptionRecordActive(subscription),
-        ) ?? null
-      : null;
-
-  const subscriptionStatus: SubscriptionStatus = activeModelSubscription
-    ? "active"
-    : "inactive";
-
-  return {
-    ...user,
-    subscribedModelIds,
-    subscriptionStatus,
-    subscriptionPrice: activeModelSubscription?.price ?? SUBSCRIPTION_PRICE,
-    subscriptionStartedAt: activeModelSubscription?.startedAt ?? null,
-    subscriptionExpiresAt: activeModelSubscription?.expiresAt ?? null,
-  };
-};
+export const selectCurrentUser = (state: AppStore) =>
+  state.users.find((user) => user.id === state.currentUserId) ?? null;
 
 export const selectActiveModel = (state: AppStore) =>
   state.users.find((user) => user.id === state.activeModelId && user.role === "modele") ?? null;

@@ -253,7 +253,7 @@ export function ChatPage() {
 
     return (
       <>
-        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)]">
           <Card className="h-fit">
             <CardContent className="p-4">
               <div className="mb-4">
@@ -465,54 +465,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[260px_320px_minmax(0,1fr)]">
-      <Card className="h-fit">
-        <CardContent className="p-4">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold">Modèles</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Choisis d’abord la modèle.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {accessibleModels.map((model) => {
-              const active = activeModel?.id === model.id;
-
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  onClick={() => setActiveModel(model.id)}
-                  className={`w-full rounded-[1.1rem] border p-3 text-left transition ${
-                    active
-                      ? "border-pink-500/40 bg-pink-500/10"
-                      : "border-white/5 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-11 w-11">
-                      <AvatarImage src={model.avatar} />
-                      <AvatarFallback>
-                        {model.displayName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{model.displayName}</p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        @{model.username}
-                      </p>
-                    </div>
-
-                    {active ? <Badge variant="premium">active</Badge> : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+    <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
 
       <Card className="h-fit">
         <CardContent className="p-4">
