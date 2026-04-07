@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { demoContent, demoMessages, demoTransactions, demoUsers } from "@/data/seed";
 import {
   ContentItem,
@@ -16,7 +16,7 @@ interface RegisterPayload {
   password: string;
 }
 
-interface SendMessageResult {
+interface ActionResult {
   ok: boolean;
   message: string;
 }
@@ -29,31 +29,30 @@ interface AppStore {
   transactions: Transaction[];
   messages: Message[];
   toasts: ToastItem[];
-  login: (username: string, password: string) => { ok: boolean; message: string };
-  register: (payload: RegisterPayload) => { ok: boolean; message: string };
+  login: (username: string, password: string) => ActionResult;
+  register: (payload: RegisterPayload) => ActionResult;
   logout: () => void;
   completeOnboarding: () => void;
-  simulatePayment: (contentId: string, source?: PaymentSource) => { ok: boolean; message: string };
-  sendMessage: (conversationId: string, text: string) => SendMessageResult;
+  subscribeToModel: () => ActionResult;
+  simulatePayment: (contentId: string, source?: PaymentSource) => ActionResult;
+  sendMessage: (conversationId: string, text: string) => ActionResult;
   pushToast: (title: string, description: string) => void;
   dismissToast: (toastId: string) => void;
   resetDemo: () => void;
 }
 
-const CHATTER_COMMISSION_RATE = 0.1;
+export const SUBSCRIPTION_PRICE = 12.99;
+export const SUBSCRIPTION_DURATION_DAYS = 30;
 
-const initialState = {
-  currentUserId: null,
-  onboardingComplete: false,
-  users: demoUsers,
-  content: demoContent,
-  transactions: demoTransactions,
-  messages: demoMessages,
-  toasts: [] as ToastItem[],
-};
+const CHATTER_COMMISSION_RATE = 0.1;
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 function roundToTwo(value: number) {
   return Number(value.toFixed(2));
+}
+
+function getCurrentUser(state: Pick<AppStore, "users" | "currentUserId">) {
+  return state.users.find((user) => user.id === state.currentUserId) ?? null;
 }
 
 function resolveSaleMeta(item: ContentItem, users: User[], messages: Message[]) {
@@ -71,6 +70,7 @@ function resolveSaleMeta(item: ContentItem, users: User[], messages: Message[]) 
       return {
         creatorId: creator?.id ?? item.creatorId,
         creatorUsername: creator?.username ?? "modele_test",
+        sellerId: creator?.id ?? item.creatorId,
         soldByUserId: seller.id,
         soldByUsername: seller.username,
         soldByRole,
@@ -82,6 +82,7 @@ function resolveSaleMeta(item: ContentItem, users: User[], messages: Message[]) 
   return {
     creatorId: creator?.id ?? item.creatorId,
     creatorUsername: creator?.username ?? "modele_test",
+    sellerId: creator?.id ?? item.creatorId,
     soldByUserId: creator?.id ?? item.creatorId,
     soldByUsername: creator?.username ?? "modele_test",
     soldByRole: "modele" as SellerRole,
@@ -89,10 +90,21 @@ function resolveSaleMeta(item: ContentItem, users: User[], messages: Message[]) 
   };
 }
 
+const initialState = {
+  currentUserId: null,
+  onboardingComplete: false,
+  users: demoUsers,
+  content: demoContent,
+  transactions: demoTransactions,
+  messages: demoMessages,
+  toasts: [] as ToastItem[],
+};
+
 export const useAppStore = create<AppStore>()(
   persist(
     (set, get) => ({
       ...initialState,
+
       login: (username, password) => {
         const user = get().users.find(
           (candidate) => candidate.username === username && candidate.password === password,
@@ -108,6 +120,7 @@ export const useAppStore = create<AppStore>()(
 
       register: ({ username, password }) => {
         const alreadyExists = get().users.some((user) => user.username === username);
+
         if (alreadyExists) {
           return { ok: false, message: "Ce nom d’utilisateur existe déjà." };
         }
@@ -121,6 +134,9 @@ export const useAppStore = create<AppStore>()(
           avatar: `https://picsum.photos/seed/${username}/200/200`,
           bio: "Nouveau fan inscrit depuis la démo locale.",
           subscriptionStatus: "inactive",
+          subscriptionPrice: SUBSCRIPTION_PRICE,
+          subscriptionStartedAt: null,
+          subscriptionExpiresAt: null,
         };
 
         set((state) => ({
@@ -140,11 +156,56 @@ export const useAppStore = create<AppStore>()(
       },
 
       logout: () => set({ currentUserId: null }),
+
       completeOnboarding: () => set({ onboardingComplete: true }),
+
+      subscribeToModel: () => {
+        const state = get();
+        const currentUser = getCurrentUser(state);
+
+        if (!currentUser) {
+          return { ok: false, message: "Connecte-toi pour t’abonner." };
+        }
+
+        if (currentUser.role !== "subscriber") {
+          return { ok: false, message: "Seuls les fans peuvent s’abonner." };
+        }
+
+        if (isSubscriptionActive(currentUser)) {
+          return { ok: true, message: "Ton abonnement est déjà actif." };
+        }
+
+        const startedAt = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + SUBSCRIPTION_DURATION_DAYS * DAY_MS).toISOString();
+
+        set((previous) => ({
+          users: previous.users.map((user) =>
+            user.id === currentUser.id
+              ? {
+                  ...user,
+                  subscriptionStatus: "active",
+                  subscriptionPrice: SUBSCRIPTION_PRICE,
+                  subscriptionStartedAt: startedAt,
+                  subscriptionExpiresAt: expiresAt,
+                }
+              : user,
+          ),
+          toasts: [
+            {
+              id: `toast-${Date.now()}`,
+              title: "Abonnement activé",
+              description: `Audience privée ouverte pendant ${SUBSCRIPTION_DURATION_DAYS} jours.`,
+            },
+            ...previous.toasts,
+          ],
+        }));
+
+        return { ok: true, message: "Abonnement activé." };
+      },
 
       simulatePayment: (contentId, source = "catalogue") => {
         const state = get();
-        const currentUser = state.users.find((user) => user.id === state.currentUserId);
+        const currentUser = getCurrentUser(state);
         const item = state.content.find((content) => content.id === contentId);
 
         if (!currentUser) {
@@ -157,6 +218,13 @@ export const useAppStore = create<AppStore>()(
 
         if (currentUser.role !== "subscriber") {
           return { ok: true, message: "Les comptes internes ont déjà accès au contenu." };
+        }
+
+        if (item.visibility !== "public" && !isSubscriptionActive(currentUser)) {
+          return {
+            ok: false,
+            message: "Abonne-toi d’abord pour accéder aux contenus privés.",
+          };
         }
 
         const existing = state.transactions.find(
@@ -183,6 +251,7 @@ export const useAppStore = create<AppStore>()(
           buyerUsername: currentUser.username,
           creatorId: saleMeta.creatorId,
           creatorUsername: saleMeta.creatorUsername,
+          sellerId: saleMeta.sellerId,
           soldByUserId: saleMeta.soldByUserId,
           soldByUsername: saleMeta.soldByUsername,
           soldByRole: saleMeta.soldByRole,
@@ -203,10 +272,7 @@ export const useAppStore = create<AppStore>()(
             {
               id: `toast-${Date.now()}`,
               title: "Paiement simulé réussi",
-              description:
-                saleMeta.soldByRole === "chateur"
-                  ? `${item.title} a été débloqué. Vente attribuée au chateur.`
-                  : `${item.title} a été débloqué. Vente attribuée à la modèle.`,
+              description: `${item.title} est maintenant déverrouillé.`,
             },
             ...previous.toasts,
           ],
@@ -217,22 +283,19 @@ export const useAppStore = create<AppStore>()(
 
       sendMessage: (conversationId, text) => {
         const state = get();
-        const currentUser = state.users.find((user) => user.id === state.currentUserId);
+        const currentUser = getCurrentUser(state);
 
         if (!currentUser || !text.trim()) {
           return { ok: false, message: "Message vide." };
         }
 
-        if (
-          currentUser.role === "subscriber" &&
-          currentUser.subscriptionStatus !== "active"
-        ) {
+        if (currentUser.role === "subscriber" && !isSubscriptionActive(currentUser)) {
           set((previous) => ({
             toasts: [
               {
                 id: `toast-${Date.now()}`,
                 title: "Audience privée réservée",
-                description: "Seuls les fans abonnés peuvent écrire à la modèle.",
+                description: "Abonne-toi pour envoyer des messages privés.",
               },
               ...previous.toasts,
             ],
@@ -240,7 +303,7 @@ export const useAppStore = create<AppStore>()(
 
           return {
             ok: false,
-            message: "Seuls les abonnés peuvent envoyer des messages.",
+            message: "Seuls les fans abonnés peuvent écrire à la modèle.",
           };
         }
 
@@ -304,6 +367,12 @@ export const useAppStore = create<AppStore>()(
 export const selectCurrentUser = (state: AppStore) =>
   state.users.find((user) => user.id === state.currentUserId) ?? null;
 
+export const isSubscriptionActive = (user: User | null) => {
+  if (!user || user.role !== "subscriber") return false;
+  if (!user.subscriptionExpiresAt) return false;
+  return new Date(user.subscriptionExpiresAt).getTime() > Date.now();
+};
+
 export const hasAccessToContent = (
   user: User | null,
   item: ContentItem,
@@ -311,6 +380,13 @@ export const hasAccessToContent = (
 ) => {
   if (!user) return false;
   if (user.role === "modele" || user.role === "chateur") return true;
+
+  if (item.visibility === "public" && item.price === 0) return true;
+
+  if (!isSubscriptionActive(user)) return false;
+
+  if (item.visibility === "subscriber" && item.price === 0) return true;
+
   if (item.price === 0) return true;
 
   return transactions.some(

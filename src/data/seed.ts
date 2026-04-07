@@ -29,6 +29,9 @@ export const demoUsers: User[] = [
     avatar: "https://picsum.photos/id/1005/200/200",
     bio: "Fan premium abonné.",
     subscriptionStatus: "active",
+    subscriptionPrice: 12.99,
+    subscriptionStartedAt: "2026-04-01T12:00:00.000Z",
+    subscriptionExpiresAt: "2099-04-30T12:00:00.000Z",
   },
   {
     id: "user-fan-2",
@@ -39,16 +42,22 @@ export const demoUsers: User[] = [
     avatar: "https://picsum.photos/id/1011/200/200",
     bio: "Fan actif avec accès audience privée.",
     subscriptionStatus: "active",
+    subscriptionPrice: 12.99,
+    subscriptionStartedAt: "2026-04-01T12:00:00.000Z",
+    subscriptionExpiresAt: "2099-04-30T12:00:00.000Z",
   },
   {
     id: "user-fan-public",
     username: "fan_public",
     password: "123456",
     role: "subscriber",
-    displayName: "fan_public",
+    displayName: "Bidy",
     avatar: "https://picsum.photos/id/1027/200/200",
     bio: "Fan non abonné, accès public uniquement.",
     subscriptionStatus: "inactive",
+    subscriptionPrice: 12.99,
+    subscriptionStartedAt: null,
+    subscriptionExpiresAt: null,
   },
 ];
 
@@ -70,6 +79,20 @@ export const demoContent: ContentItem[] = [
   {
     id: "content-2",
     creatorId: "user-modele",
+    chateurId: null,
+    linkedMessageId: "msg-6",
+    title: "Journal privé abonnés",
+    caption: "Contenu réservé aux abonnés actifs.",
+    price: 0,
+    mediaType: "image",
+    mediaUrl: "https://picsum.photos/id/1025/1200/900",
+    previewUrl: "https://picsum.photos/id/1025/1200/900",
+    visibility: "subscriber",
+    createdAt: "2026-04-02T08:00:00.000Z",
+  },
+  {
+    id: "content-3",
+    creatorId: "user-modele",
     chateurId: "user-chateur",
     linkedMessageId: "msg-2",
     title: "Galerie privée Gold",
@@ -82,7 +105,7 @@ export const demoContent: ContentItem[] = [
     createdAt: "2026-04-02T10:30:00.000Z",
   },
   {
-    id: "content-3",
+    id: "content-4",
     creatorId: "user-modele",
     chateurId: null,
     linkedMessageId: "msg-4",
@@ -96,7 +119,7 @@ export const demoContent: ContentItem[] = [
     createdAt: "2026-04-03T14:00:00.000Z",
   },
   {
-    id: "content-4",
+    id: "content-5",
     creatorId: "user-modele",
     chateurId: "user-chateur",
     linkedMessageId: "msg-5",
@@ -133,7 +156,7 @@ export const demoMessages: Message[] = [
     senderDisplayName: "chateur_test",
     subscriberVisibleSenderName: "modele_test",
     text: "J’ai préparé une galerie privée à 8€ si tu veux voir plus.",
-    contentId: "content-2",
+    contentId: "content-3",
     createdAt: "2026-04-02T10:35:00.000Z",
   },
   {
@@ -154,7 +177,7 @@ export const demoMessages: Message[] = [
     senderDisplayName: "modele_test",
     subscriberVisibleSenderName: "modele_test",
     text: "Voici un pack VIP Night à 15€.",
-    contentId: "content-3",
+    contentId: "content-4",
     createdAt: "2026-04-03T14:15:00.000Z",
   },
   {
@@ -165,10 +188,9 @@ export const demoMessages: Message[] = [
     senderDisplayName: "chateur_test",
     subscriberVisibleSenderName: "modele_test",
     text: "Dernière option : une vidéo PPV à 25€ avec reveal instantané.",
-    contentId: "content-4",
+    contentId: "content-5",
     createdAt: "2026-04-04T19:20:00.000Z",
   },
-
   {
     id: "msg-6",
     conversationId: "conv-user-fan-2",
@@ -176,8 +198,8 @@ export const demoMessages: Message[] = [
     senderRole: "modele",
     senderDisplayName: "modele_test",
     subscriberVisibleSenderName: "modele_test",
-    text: "Salut fan_vip, j’ai préparé un teaser gratuit pour toi.",
-    contentId: "content-1",
+    text: "Salut fan_vip, voici un contenu réservé aux abonnés.",
+    contentId: "content-2",
     createdAt: "2026-04-05T08:10:00.000Z",
   },
   {
@@ -190,7 +212,6 @@ export const demoMessages: Message[] = [
     text: "Merci, je veux accéder à l’audience privée.",
     createdAt: "2026-04-05T08:20:00.000Z",
   },
-
   {
     id: "msg-8",
     conversationId: "conv-user-fan-public",

@@ -14,6 +14,9 @@ export interface User {
   bio: string;
   createdByModelId?: string;
   subscriptionStatus?: SubscriptionStatus;
+  subscriptionPrice?: number;
+  subscriptionStartedAt?: string | null;
+  subscriptionExpiresAt?: string | null;
 }
 
 export interface ContentItem {
@@ -27,7 +30,7 @@ export interface ContentItem {
   mediaType: MediaType;
   mediaUrl: string;
   previewUrl: string;
-  visibility: "public" | "ppv";
+  visibility: "public" | "subscriber" | "ppv";
   createdAt: string;
 }
 
@@ -38,6 +41,7 @@ export interface Transaction {
   buyerId: string;
   buyerUsername: string;
   creatorId: string;
+  sellerId: string;
   creatorUsername: string;
   soldByUserId: string;
   soldByUsername: string;
