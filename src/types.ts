@@ -7,16 +7,29 @@ export type SubscriptionStatus = "active" | "inactive";
 export interface User {
   id: string;
   username: string;
+  email: string;
   password: string;
   role: Role;
   displayName: string;
   avatar: string;
   bio: string;
-  createdByModelId?: string;
+  mustChangePassword?: boolean;
+  accessibleModelIds?: string[];
+  subscribedModelIds?: string[];
   subscriptionStatus?: SubscriptionStatus;
   subscriptionPrice?: number;
   subscriptionStartedAt?: string | null;
   subscriptionExpiresAt?: string | null;
+}
+
+export interface Subscription {
+  id: string;
+  subscriberId: string;
+  modelId: string;
+  price: number;
+  status: SubscriptionStatus;
+  startedAt: string | null;
+  expiresAt: string | null;
 }
 
 export interface ContentItem {
@@ -41,7 +54,6 @@ export interface Transaction {
   buyerId: string;
   buyerUsername: string;
   creatorId: string;
-  sellerId: string;
   creatorUsername: string;
   soldByUserId: string;
   soldByUsername: string;
@@ -60,6 +72,7 @@ export interface Transaction {
 export interface Message {
   id: string;
   conversationId: string;
+  modelId: string;
   senderId: string;
   senderRole: Role;
   senderDisplayName: string;

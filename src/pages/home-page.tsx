@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Crown, CreditCard, Eye, LockKeyhole, Sparkles, Users, X } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { ContentCard } from "@/components/content-card";
@@ -10,7 +10,9 @@ import {
   SUBSCRIPTION_DURATION_DAYS,
   SUBSCRIPTION_PRICE,
   hasAccessToContent,
+  isModelSubscribedByUser,
   isSubscriptionActive,
+  selectActiveModel,
   selectCurrentUser,
   useAppStore,
 } from "@/store/useAppStore";
@@ -19,6 +21,7 @@ type CatalogueTab = "all" | "public" | "subscribers" | "ppv";
 
 export function HomePage() {
   const currentUser = useAppStore(selectCurrentUser);
+  const activeModel = useAppStore(selectActiveModel);
   const content = useAppStore((state) => state.content);
   const transactions = useAppStore((state) => state.transactions);
   const simulatePayment = useAppStore((state) => state.simulatePayment);
@@ -31,15 +34,35 @@ export function HomePage() {
 
   if (!currentUser) return null;
 
-  const currentUserHasSubscription =
-    currentUser.role !== "subscriber" || isSubscriptionActive(currentUser);
+  const activeModelContent = activeModel
+    ? content.filter((item) => item.creatorId === activeModel.id)
+    : [];
 
-  const publicItems = content.filter((item) => item.visibility === "public");
-  const subscriberItems = content.filter((item) => item.visibility === "subscriber");
-  const ppvItems = content.filter((item) => item.visibility === "ppv");
+  const publicItems = useMemo(
+    () => activeModelContent.filter((item) => item.visibility === "public"),
+    [activeModelContent],
+  );
+
+  const subscriberItems = useMemo(
+    () => activeModelContent.filter((item) => item.visibility === "subscriber"),
+    [activeModelContent],
+  );
+
+  const ppvItems = useMemo(
+    () => activeModelContent.filter((item) => item.visibility === "ppv"),
+    [activeModelContent],
+  );
+
+  const hasSubscriptionForActiveModel =
+    activeModel && currentUser.role === "subscriber"
+      ? isModelSubscribedByUser(currentUser, activeModel.id)
+      : currentUser.role !== "subscriber";
+
+  const canSeePrivateForActiveModel =
+    currentUser.role !== "subscriber" || (hasSubscriptionForActiveModel && isSubscriptionActive(currentUser));
 
   const availableContent =
-    currentUser.role === "subscriber" && !currentUserHasSubscription
+    currentUser.role === "subscriber" && !canSeePrivateForActiveModel
       ? publicItems
       : activeTab === "public"
         ? publicItems
@@ -47,13 +70,13 @@ export function HomePage() {
           ? subscriberItems
           : activeTab === "ppv"
             ? ppvItems
-            : content;
+            : activeModelContent;
 
-  const unlockedCount = content.filter((item) =>
+  const unlockedCount = activeModelContent.filter((item) =>
     hasAccessToContent(currentUser, item, transactions),
   ).length;
-  const paidCount = content.filter((item) => item.price > 0).length;
-  const highestPrice = Math.max(...content.map((item) => item.price), 0);
+  const paidCount = activeModelContent.filter((item) => item.price > 0).length;
+  const highestPrice = Math.max(...activeModelContent.map((item) => item.price), 0);
 
   const handleSimulatePayment = (contentId: string) => {
     const result = simulatePayment(contentId, "catalogue");
@@ -70,10 +93,12 @@ export function HomePage() {
   };
 
   const confirmSubscription = async () => {
+    if (!activeModel) return;
+
     setIsProcessingSubscription(true);
     await new Promise((resolve) => setTimeout(resolve, 1100));
 
-    const result = subscribeToModel();
+    const result = subscribeToModel(activeModel.id);
 
     if (!result.ok) {
       pushToast("Abonnement impossible", result.message);
@@ -90,16 +115,29 @@ export function HomePage() {
   );
 
   const tabs: Array<{ key: CatalogueTab; label: string; count: number }> = [
-    { key: "all", label: "Tous", count: content.length },
+    { key: "all", label: "Tous", count: activeModelContent.length },
     { key: "public", label: "Public", count: publicItems.length },
     { key: "subscribers", label: "Abonnés", count: subscriberItems.length },
     { key: "ppv", label: "PPV", count: ppvItems.length },
   ];
 
   const visibleTabs =
-    currentUser.role === "subscriber" && !currentUserHasSubscription
+    currentUser.role === "subscriber" && !canSeePrivateForActiveModel
       ? tabs.filter((tab) => tab.key === "public")
       : tabs;
+
+  if (!activeModel) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <h3 className="text-2xl font-semibold">Aucune modèle active</h3>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Choisis d’abord une modèle depuis le sélecteur.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -119,28 +157,27 @@ export function HomePage() {
                 />
                 <div className="space-y-2">
                   <p className="text-sm uppercase tracking-[0.25em] text-white/55">
-                    Prototype React complet
+                    Modèle sélectionnée
                   </p>
                   <h2 className="text-2xl font-semibold leading-tight sm:text-3xl xl:text-4xl">
-                    Only18+ Premium Demo
+                    {activeModel.displayName}
                   </h2>
                 </div>
               </div>
 
               <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                Le catalogue est séparé par audience. Les contenus privés et PPV
-                se verrouillent automatiquement quand l’abonnement expire.
+                Catalogue filtré sur la modèle active. Les contenus abonnés et PPV suivent l’état d’abonnement du fan pour cette modèle.
               </p>
 
-              {currentUser.role === "subscriber" && !currentUserHasSubscription ? (
+              {currentUser.role === "subscriber" && !canSeePrivateForActiveModel ? (
                 <div className="rounded-[1.25rem] border border-amber-500/20 bg-amber-500/10 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-medium text-white">
-                        Abonnement requis pour les contenus privés
+                        Abonnement requis pour {activeModel.displayName}
                       </p>
                       <p className="mt-1 text-sm text-white/70">
-                        Débloque l’audience privée pendant {SUBSCRIPTION_DURATION_DAYS} jours.
+                        Débloque les contenus privés pendant {SUBSCRIPTION_DURATION_DAYS} jours.
                       </p>
                     </div>
                     <Button variant="premium" onClick={openSubscribeModal}>
@@ -160,7 +197,7 @@ export function HomePage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Accès actuel</p>
                     <p className="text-2xl font-semibold">
-                      {unlockedCount}/{content.length}
+                      {unlockedCount}/{activeModelContent.length}
                     </p>
                   </div>
                 </div>
@@ -185,9 +222,7 @@ export function HomePage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Ticket max</p>
-                    <p className="text-2xl font-semibold">
-                      {formatCurrency(highestPrice)}
-                    </p>
+                    <p className="text-2xl font-semibold">{formatCurrency(highestPrice)}</p>
                   </div>
                 </div>
               </div>
@@ -211,7 +246,7 @@ export function HomePage() {
           <div>
             <h3 className="text-2xl font-semibold">Catalogue</h3>
             <p className="text-sm text-muted-foreground">
-              Public, abonnés et PPV avec filtres rapides.
+              Filtré sur {activeModel.displayName}.
             </p>
           </div>
 
@@ -243,9 +278,7 @@ export function HomePage() {
         {availableContent.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
-              <h4 className="text-xl font-semibold">
-                Aucun contenu dans cette section
-              </h4>
+              <h4 className="text-xl font-semibold">Aucun contenu dans cette section</h4>
               <p className="mt-3 text-sm text-muted-foreground">
                 Essaie un autre filtre du catalogue.
               </p>
@@ -272,7 +305,7 @@ export function HomePage() {
               <div>
                 <p className="text-sm text-pink-300">Abonnement simulé</p>
                 <h3 className="mt-1 text-xl font-semibold text-white">
-                  Débloquer les contenus privés
+                  S’abonner à {activeModel.displayName}
                 </h3>
               </div>
               <button
@@ -287,8 +320,8 @@ export function HomePage() {
 
             <div className="mt-5 space-y-3 rounded-[1.2rem] border border-white/10 bg-white/5 p-4 text-sm">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">Abonnement</span>
-                <span className="font-medium text-white">Only18+ privé</span>
+                <span className="text-muted-foreground">Modèle</span>
+                <span className="font-medium text-white">{activeModel.displayName}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-muted-foreground">Montant</span>

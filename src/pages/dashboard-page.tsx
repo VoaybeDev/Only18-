@@ -3,9 +3,9 @@ import { DashboardRevenueChart } from "@/components/dashboard-revenue-chart";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { selectCurrentUser, useAppStore } from "@/store/useAppStore";
-import { PaymentSource } from "@/types";
+import { formatDate } from "@/lib/utils";
+import { selectActiveModel, selectCurrentUser, useAppStore } from "@/store/useAppStore";
+import type { PaymentSource } from "@/types";
 
 const formatPreciseCurrency = (amount: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -23,24 +23,38 @@ const sourceLabel: Record<PaymentSource, string> = {
 
 export function DashboardPage() {
   const currentUser = useAppStore(selectCurrentUser);
+  const activeModel = useAppStore(selectActiveModel);
   const content = useAppStore((state) => state.content);
   const transactions = useAppStore((state) => state.transactions);
 
   if (!currentUser) return null;
 
-  const modelTransactions = transactions.filter(
-    (transaction) => transaction.creatorId === currentUser.id,
-  );
+  const activeModelId =
+    currentUser.role === "modele" ? currentUser.id : activeModel?.id ?? null;
 
-  const chateurTransactions = transactions.filter(
-    (transaction) =>
-      transaction.soldByUserId === currentUser.id && transaction.soldByRole === "chateur",
-  );
+  const activeModelContent = activeModelId
+    ? content.filter((item) => item.creatorId === activeModelId)
+    : [];
+
+  const modelTransactions = activeModelId
+    ? transactions.filter((transaction) => transaction.creatorId === activeModelId)
+    : [];
+
+  const chateurTransactions =
+    currentUser.role === "chateur"
+      ? modelTransactions.filter(
+          (transaction) =>
+            transaction.soldByUserId === currentUser.id &&
+            transaction.soldByRole === "chateur",
+        )
+      : [];
 
   const visibleTransactions =
     currentUser.role === "modele" ? modelTransactions : chateurTransactions;
 
-  const totalUnlockedUnits = transactions.filter((transaction) => transaction.accessGranted).length;
+  const totalUnlockedUnits = visibleTransactions.filter(
+    (transaction) => transaction.accessGranted,
+  ).length;
 
   const modelGrossRevenue = modelTransactions.reduce(
     (sum, transaction) => sum + transaction.amount,
@@ -76,7 +90,7 @@ export function DashboardPage() {
 
   const chartData =
     currentUser.role === "modele"
-      ? content
+      ? activeModelContent
           .filter((item) => item.price > 0)
           .map((item) => ({
             label: item.title,
@@ -84,7 +98,7 @@ export function DashboardPage() {
               .filter((transaction) => transaction.contentId === item.id)
               .reduce((sum, transaction) => sum + transaction.amount, 0),
           }))
-      : content
+      : activeModelContent
           .filter((item) =>
             chateurTransactions.some((transaction) => transaction.contentId === item.id),
           )
@@ -105,7 +119,13 @@ export function DashboardPage() {
               ? "Vue détaillée des paiements, du vendeur réel et du net encaissé."
               : "Vue détaillée des ventes attribuées au chateur et de sa commission."}
           </p>
+          {activeModel && currentUser.role === "chateur" ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Modèle active : {activeModel.displayName}
+            </p>
+          ) : null}
         </div>
+
         <Badge variant={currentUser.role === "modele" ? "premium" : "accent"}>
           {currentUser.role}
         </Badge>
@@ -289,8 +309,8 @@ export function DashboardPage() {
               <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>Le subscriber ne doit jamais savoir qu’un chateur existe.</p>
                 <p>
-                  Dans le chat fan, chaque message du chateur prend automatiquement le nom visible{" "}
-                  <strong>modele_test</strong>.
+                  Dans le chat fan, chaque message du chateur prend automatiquement le nom visible de la
+                  modèle active.
                 </p>
                 <p>
                   Le dashboard interne indique malgré tout qui a réellement vendu : la modèle ou le
