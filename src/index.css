@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 18% 7%;
+  --foreground: 210 20% 98%;
+  --card: 240 16% 11%;
+  --card-foreground: 210 20% 98%;
+  --popover: 240 16% 11%;
+  --popover-foreground: 210 20% 98%;
+  --primary: 330 86% 61%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 10% 18%;
+  --secondary-foreground: 210 20% 98%;
+  --muted: 240 8% 16%;
+  --muted-foreground: 240 8% 70%;
+  --accent: 224 76% 58%;
+  --accent-foreground: 210 20% 98%;
+  --border: 240 7% 20%;
+  --input: 240 7% 20%;
+  --ring: 330 86% 61%;
+  --success: 146 62% 44%;
+  --warning: 40 96% 58%;
+}
+
+* {
+  @apply border-border;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  background-image: radial-gradient(circle at top left, rgba(236, 72, 153, 0.12), transparent 25%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 20%),
+    linear-gradient(180deg, #09090b 0%, #0f0f13 100%);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.premium-border {
+  position: relative;
+}
+
+.premium-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.6), rgba(59, 130, 246, 0.4), rgba(255, 255, 255, 0.1));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
