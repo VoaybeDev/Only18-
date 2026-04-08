@@ -8,10 +8,13 @@ import {
   demoUsers,
 } from "@/data/seed";
 import {
+  ComposerMediaPayload,
   ContentItem,
+  InlineAttachment,
   Message,
   PaymentSource,
   SellerRole,
+  SendMessagePayload,
   Subscription,
   SubscriptionStatus,
   ToastItem,
@@ -57,7 +60,9 @@ interface AppStore {
   subscribeToModel: (modelId?: string) => ActionResult;
   createOrGrantChatterAccess: (payload: ChatterAccessPayload) => ActionResult;
   simulatePayment: (contentId: string, source?: PaymentSource) => ActionResult;
-  sendMessage: (conversationId: string, modelId: string, text: string) => ActionResult;
+  sendMessage: (conversationId: string, modelId: string, payload: SendMessagePayload) => ActionResult;
+  updateContentPrice: (contentId: string, nextPrice: number) => ActionResult;
+  deleteContent: (contentId: string) => ActionResult;
   pushToast: (title: string, description: string) => void;
   dismissToast: (toastId: string) => void;
   resetDemo: () => void;
@@ -231,6 +236,12 @@ function resolveSaleMeta(item: ContentItem, users: User[], messages: Message[]) 
     soldByRole: "modele" as SellerRole,
     chateurId: null,
   };
+}
+
+function isContentAlreadySold(contentId: string, transactions: Transaction[]) {
+  return transactions.some(
+    (transaction) => transaction.contentId === contentId && transaction.accessGranted,
+  );
 }
 
 const initialState: StoreState = {
@@ -662,11 +673,17 @@ export const useAppStore = create<AppStore>()(
         return { ok: true, message: "Paiement simulé réussi." };
       },
 
-      sendMessage: (conversationId, modelId, text) => {
+      sendMessage: (conversationId, modelId, payload) => {
         const state = get();
         const currentUser = getCurrentUser(state);
 
-        if (!currentUser || !text.trim()) {
+        if (!currentUser) {
+          return { ok: false, message: "Aucune session active." };
+        }
+
+        const trimmedText = payload.text.trim();
+
+        if (!trimmedText && !payload.mediaItem) {
           return { ok: false, message: "Message vide." };
         }
 
@@ -711,8 +728,45 @@ export const useAppStore = create<AppStore>()(
           return { ok: false, message: "Cette session modèle ne correspond pas à la conversation." };
         }
 
+        const messageId = `msg-${Date.now()}`;
+        let createdContent: ContentItem | null = null;
+        let inlineAttachment: InlineAttachment | undefined;
+        let contentId: string | undefined;
+
+        if (payload.mediaItem) {
+          const mediaItem: ComposerMediaPayload = payload.mediaItem;
+
+          if (currentUser.role === "subscriber") {
+            inlineAttachment = {
+              id: `inline-${Date.now()}`,
+              title: mediaItem.title,
+              caption: mediaItem.caption,
+              mediaType: mediaItem.mediaType,
+              mediaUrl: mediaItem.mediaUrl,
+              previewUrl: mediaItem.previewUrl,
+            };
+          } else {
+            const nextPrice = Math.max(0, Number(mediaItem.price ?? 0));
+            createdContent = {
+              id: `content-${Date.now()}`,
+              creatorId: modelId,
+              chateurId: currentUser.role === "chateur" ? currentUser.id : null,
+              linkedMessageId: messageId,
+              title: mediaItem.title,
+              caption: mediaItem.caption,
+              price: nextPrice,
+              mediaType: mediaItem.mediaType,
+              mediaUrl: mediaItem.mediaUrl,
+              previewUrl: mediaItem.previewUrl,
+              visibility: nextPrice > 0 ? "ppv" : "subscriber",
+              createdAt: new Date().toISOString(),
+            };
+            contentId = createdContent.id;
+          }
+        }
+
         const message: Message = {
-          id: `msg-${Date.now()}`,
+          id: messageId,
           conversationId,
           modelId,
           senderId: currentUser.id,
@@ -720,15 +774,98 @@ export const useAppStore = create<AppStore>()(
           senderDisplayName: currentUser.displayName,
           subscriberVisibleSenderName:
             currentUser.role === "subscriber" ? currentUser.displayName : model.displayName,
-          text: text.trim(),
+          text:
+            trimmedText ||
+            (currentUser.role === "subscriber" ? "Média envoyé." : "Nouveau média partagé."),
+          contentId,
+          inlineAttachment,
           createdAt: new Date().toISOString(),
         };
 
         set((previous) => ({
           messages: [...previous.messages, message],
+          content: createdContent ? [createdContent, ...previous.content] : previous.content,
         }));
 
         return { ok: true, message: "Message envoyé." };
+      },
+
+      updateContentPrice: (contentId, nextPrice) => {
+        const state = get();
+        const currentUser = getCurrentUser(state);
+
+        if (!currentUser || currentUser.role === "subscriber") {
+          return { ok: false, message: "Action réservée à l’équipe interne." };
+        }
+
+        const target = state.content.find((item) => item.id === contentId);
+
+        if (!target) {
+          return { ok: false, message: "Contenu introuvable." };
+        }
+
+        if (isContentAlreadySold(contentId, state.transactions)) {
+          return {
+            ok: false,
+            message: "Ce média a déjà été acheté. Son prix est maintenant verrouillé.",
+          };
+        }
+
+        const normalizedPrice = Math.max(0, Number(nextPrice));
+
+        set((previous) => ({
+          content: previous.content.map((item) =>
+            item.id === contentId
+              ? {
+                  ...item,
+                  price: normalizedPrice,
+                  visibility: normalizedPrice > 0 ? "ppv" : "subscriber",
+                }
+              : item,
+          ),
+        }));
+
+        return { ok: true, message: "Prix mis à jour." };
+      },
+
+      deleteContent: (contentId) => {
+        const state = get();
+        const currentUser = getCurrentUser(state);
+
+        if (!currentUser || currentUser.role === "subscriber") {
+          return { ok: false, message: "Action réservée à l’équipe interne." };
+        }
+
+        const target = state.content.find((item) => item.id === contentId);
+
+        if (!target) {
+          return { ok: false, message: "Contenu introuvable." };
+        }
+
+        if (isContentAlreadySold(contentId, state.transactions)) {
+          return {
+            ok: false,
+            message: "Ce média a déjà été acheté. Il ne peut plus être supprimé.",
+          };
+        }
+
+        set((previous) => ({
+          content: previous.content.filter((item) => item.id !== contentId),
+          messages: previous.messages.map((message) => {
+            if (message.contentId !== contentId) return message;
+
+            const shouldReplaceText =
+              message.text === "Nouveau média partagé." || message.text === "Média envoyé.";
+
+            return {
+              ...message,
+              contentId: undefined,
+              text: shouldReplaceText ? "Média retiré." : message.text,
+            };
+          }),
+        }));
+
+        return { ok: true, message: "Média supprimé." };
       },
 
       pushToast: (title, description) => {

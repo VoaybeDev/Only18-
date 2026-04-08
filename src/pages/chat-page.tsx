@@ -16,6 +16,7 @@ import {
   selectCurrentUser,
   useAppStore,
 } from "@/store/useAppStore";
+import { SendMessagePayload } from "@/types";
 
 export function ChatPage() {
   const currentUser = useAppStore(selectCurrentUser);
@@ -28,6 +29,8 @@ export function ChatPage() {
   const sendMessage = useAppStore((state) => state.sendMessage);
   const simulatePayment = useAppStore((state) => state.simulatePayment);
   const subscribeToModel = useAppStore((state) => state.subscribeToModel);
+  const updateContentPrice = useAppStore((state) => state.updateContentPrice);
+  const deleteContent = useAppStore((state) => state.deleteContent);
   const pushToast = useAppStore((state) => state.pushToast);
 
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -189,7 +192,27 @@ export function ChatPage() {
     }
   };
 
-  const handleSendMessage = (text: string) => {
+  const handleUpdateContentPrice = (contentId: string, nextPrice: number) => {
+    const result = updateContentPrice(contentId, nextPrice);
+    if (!result.ok) {
+      pushToast("Action impossible", result.message);
+      return;
+    }
+
+    pushToast("Prix mis à jour", result.message);
+  };
+
+  const handleDeleteContent = (contentId: string) => {
+    const result = deleteContent(contentId);
+    if (!result.ok) {
+      pushToast("Action impossible", result.message);
+      return;
+    }
+
+    pushToast("Média supprimé", result.message);
+  };
+
+  const handleSendMessage = (payload: SendMessagePayload) => {
     if (!activeModel) {
       pushToast("Modèle introuvable", "Sélectionne d’abord une modèle.");
       return;
@@ -205,7 +228,7 @@ export function ChatPage() {
       return;
     }
 
-    const result = sendMessage(conversationId, activeModel.id, text);
+    const result = sendMessage(conversationId, activeModel.id, payload);
 
     if (!result.ok) {
       pushToast("Envoi impossible", result.message);
@@ -324,6 +347,7 @@ export function ChatPage() {
           ) : activeModelSubscribed && isActiveSubscriber ? (
             <ChatThread
               currentUser={currentUser}
+              activeModel={activeModel}
               title={activeModel.displayName}
               subtitle={
                 currentUser.subscriptionExpiresAt
@@ -337,6 +361,8 @@ export function ChatPage() {
               transactions={transactions}
               onSendMessage={handleSendMessage}
               onSimulatePayment={handleSimulatePayment}
+              onUpdateContentPrice={handleUpdateContentPrice}
+              onDeleteContent={handleDeleteContent}
             />
           ) : (
             <div className="space-y-6">
@@ -466,7 +492,6 @@ export function ChatPage() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-
       <Card className="h-fit">
         <CardContent className="p-4">
           <div className="mb-4">
@@ -535,6 +560,7 @@ export function ChatPage() {
       {selectedInternalConversation && activeModel ? (
         <ChatThread
           currentUser={currentUser}
+          activeModel={activeModel}
           title={selectedInternalConversation.fan.displayName}
           subtitle={`${activeModel.displayName} · ${
             isModelSubscribedByUser(selectedInternalConversation.fan, activeModel.id)
@@ -548,6 +574,8 @@ export function ChatPage() {
           transactions={transactions}
           onSendMessage={handleSendMessage}
           onSimulatePayment={handleSimulatePayment}
+          onUpdateContentPrice={handleUpdateContentPrice}
+          onDeleteContent={handleDeleteContent}
         />
       ) : (
         <Card>

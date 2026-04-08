@@ -69,6 +69,15 @@ export interface Transaction {
   createdAt: string;
 }
 
+export interface InlineAttachment {
+  id: string;
+  title: string;
+  caption: string;
+  mediaType: MediaType;
+  mediaUrl: string;
+  previewUrl: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -79,7 +88,42 @@ export interface Message {
   subscriberVisibleSenderName: string;
   text: string;
   contentId?: string;
+  inlineAttachment?: InlineAttachment;
   createdAt: string;
+}
+
+export interface ComposerMediaPayload {
+  title: string;
+  caption: string;
+  mediaType: MediaType;
+  mediaUrl: string;
+  previewUrl: string;
+  price?: number;
+}
+
+export interface SendMessagePayload {
+  text: string;
+  mediaItem?: ComposerMediaPayload | null;
+}
+
+export interface MediaLibraryItem {
+  id: string;
+  ownerModelId?: string | null;
+  collection: string;
+  title: string;
+  caption: string;
+  mediaType: MediaType;
+  mediaUrl: string;
+  previewUrl: string;
+  defaultPrice: number;
+}
+
+export interface ScriptTemplate {
+  id: string;
+  ownerModelId?: string | null;
+  phase: string;
+  title: string;
+  body: string;
 }
 
 export interface OnboardingSlide {
