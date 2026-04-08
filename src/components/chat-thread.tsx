@@ -10,7 +10,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { demoMediaLibrary, demoScripts } from "@/data/seed";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +75,8 @@ export function ChatThread({
   const [draftMedia, setDraftMedia] = useState<MediaLibraryItem | null>(null);
   const [draftMediaPrice, setDraftMediaPrice] = useState(0);
   const [editingPrices, setEditingPrices] = useState<Record<string, string>>({});
+
+  const localMediaInputRef = useRef<HTMLInputElement | null>(null);
 
   const isInternalComposer = currentUser.role === "modele" || currentUser.role === "chateur";
 
@@ -237,8 +239,66 @@ export function ChatThread({
     onUpdateContentPrice(contentId, numericValue);
   };
 
+  const openMediaSelector = () => {
+  setEmojiOpen(false);
+  setScriptsOpen(false);
+
+  if (isInternalComposer) {
+    setMediaPickerOpen(true);
+    return;
+  }
+
+  localMediaInputRef.current?.click();
+};
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Impossible de lire le fichier."));
+    reader.readAsDataURL(file);
+  });
+
+const handleLocalMediaChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+
+  if (!isImage && !isVideo) return;
+
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+
+    setDraftMedia({
+      id: `local-${Date.now()}`,
+      ownerModelId: null,
+      collection: "Fichier local",
+      title: file.name.replace(/\.[^.]+$/, "") || file.name,
+      caption: "Fichier local joint par le fan.",
+      mediaType: isVideo ? "video" : "image",
+      mediaUrl: dataUrl,
+      previewUrl: dataUrl,
+      defaultPrice: 0,
+    });
+
+    setDraftMediaPrice(0);
+  } finally {
+    event.target.value = "";
+  }
+};
   return (
-    <>
+  <>
+    <input
+      ref={localMediaInputRef}
+      type="file"
+      accept="image/*,video/*"
+      className="hidden"
+      onChange={handleLocalMediaChange}
+    />
       <div className="flex min-h-[70dvh] w-full min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-white/5 bg-card/80 shadow-premium lg:min-h-[calc(100dvh-9rem)]">
         <div className="border-b border-white/5 p-4 sm:p-5 lg:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -553,7 +613,7 @@ export function ChatThread({
                         <Badge variant="success">Sans PPV</Badge>
                       )}
 
-                      <Button variant="outline" size="icon" onClick={() => setDraftMedia(null)}>
+                      <Button variant="secondary" size="icon" onClick={() => setDraftMedia(null)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -581,11 +641,7 @@ export function ChatThread({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setMediaPickerOpen(true);
-                      setEmojiOpen(false);
-                      setScriptsOpen(false);
-                    }}
+                    onClick={openMediaSelector}
                   >
                     <ImagePlus className="h-4 w-4" />
                     Médias
@@ -754,7 +810,7 @@ export function ChatThread({
         </div>
       ) : null}
 
-      {mediaPickerOpen ? (
+      {mediaPickerOpen && isInternalComposer ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
           <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0f0b18] shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
