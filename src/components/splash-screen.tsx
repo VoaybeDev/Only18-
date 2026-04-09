@@ -19,12 +19,14 @@ export function SplashScreen() {
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative flex flex-col items-center gap-6"
+        className="relative flex flex-col items-center gap-8"
       >
-        <div className="glass premium-border rounded-[2rem] px-8 py-7">
+        <div className="glass premium-border rounded-[2.6rem] px-14 py-12 sm:px-16 sm:py-14">
           <AppLogo
-            logoClassName="h-24 w-24 rounded-[1.6rem] p-2.5"
-            textClassName="pr-2"
+            className="items-center gap-5"
+            logoClassName="h-44 w-44 rounded-[2.2rem] p-3 sm:h-52 sm:w-52"
+            textClassName="text-4xl sm:text-5xl"
+            subtitleClassName="text-lg sm:text-xl"
           />
         </div>
 
@@ -32,7 +34,7 @@ export function SplashScreen() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="text-center text-sm uppercase tracking-[0.35em] text-white/70"
+          className="text-center text-sm uppercase tracking-[0.35em] text-white/70 sm:text-base"
         >
           expérience premium simulée
         </motion.p>

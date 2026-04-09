@@ -4,6 +4,7 @@ interface AppLogoProps {
   className?: string;
   logoClassName?: string;
   textClassName?: string;
+  subtitleClassName?: string;
   compact?: boolean;
 }
 
@@ -11,6 +12,7 @@ export function AppLogo({
   className,
   logoClassName,
   textClassName,
+  subtitleClassName,
   compact = false,
 }: AppLogoProps) {
   return (
@@ -30,11 +32,21 @@ export function AppLogo({
       </div>
 
       {!compact ? (
-        <div className={cn("min-w-0", textClassName)}>
-          <p className="text-lg font-semibold leading-none tracking-tight text-white">
+        <div className="min-w-0">
+          <p
+            className={cn(
+              "text-lg font-semibold leading-none tracking-tight text-white",
+              textClassName,
+            )}
+          >
             Only18+
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p
+            className={cn(
+              "mt-1 text-xs text-muted-foreground",
+              subtitleClassName,
+            )}
+          >
             premium content demo
           </p>
         </div>
